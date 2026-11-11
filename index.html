@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Tìm số nguyên tố</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 16px;
+      display: grid;
+      place-items: center;
+      font-family: system-ui, sans-serif;
+      background: #f1f5f4;
+      color: #17211d;
+    }
+
+    main {
+      width: min(800px, 100%);
+      padding: 32px;
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 14px 40px #0002;
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    form {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    label {
+      width: 100%;
+      font-weight: bold;
+    }
+
+    input {
+      flex: 1;
+      min-width: 200px;
+      padding: 12px;
+      border: 1px solid #a7b3ad;
+      border-radius: 10px;
+      font: inherit;
+    }
+
+    button {
+      padding: 12px 18px;
+      border: 0;
+      border-radius: 10px;
+      background: #3ecf8e;
+      color: #082518;
+      font: inherit;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    #status {
+      min-height: 24px;
+      margin-top: 20px;
+    }
+
+    #summary {
+      margin: 8px 0 12px;
+      font-weight: bold;
+    }
+
+    #output {
+      max-height: 400px;
+      padding: 16px;
+      overflow: auto;
+      line-height: 1.7;
+      overflow-wrap: anywhere;
+      background: #edf3f0;
+      border-radius: 12px;
+    }
+
+    .error {
+      color: #b42318;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #101714;
+        color: #edf5f1;
+      }
+
+      main {
+        background: #19231f;
+      }
+
+      input,
+      #output {
+        color: white;
+        background: #0f1713;
+        border-color: #55625c;
+      }
+
+      .error {
+        color: #ff8a80;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>Tìm các số nguyên tố</h1>
+
+    <p>
+      Nhập một số nguyên. Chương trình sẽ liệt kê tất cả
+      số nguyên tố nhỏ hơn số đó.
+    </p>
+
+    <form id="prime-form">
+      <label for="limit">
+        Nhập số từ 2 đến 1.000.000
+      </label>
+
+      <input
+        id="limit"
+        type="number"
+        min="2"
+        max="1000000"
+        step="1"
+        value="100"
+        required
+      >
+
+      <button id="submit" type="submit">
+        Tính toán
+      </button>
+    </form>
+
+    <div
+      id="status"
+      role="status"
+      aria-live="polite"
+    ></div>
+
+    <div id="summary"></div>
+
+    <div id="output" hidden></div>
+  </main>
+
+  <script>
+    // Thay URL này bằng URL Edge Function của bạn.
+    const FUNCTION_URL =
+      "https://PROJECT_ID.supabase.co/functions/v1/primes";
+
+    const form = document.querySelector("#prime-form");
+    const input = document.querySelector("#limit");
+    const button = document.querySelector("#submit");
+    const statusBox = document.querySelector("#status");
+    const summary = document.querySelector("#summary");
+    const output = document.querySelector("#output");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      statusBox.className = "";
+      summary.textContent = "";
+      output.textContent = "";
+      output.hidden = true;
+
+      const limit = Number(input.value);
+
+      if (
+        !Number.isSafeInteger(limit) ||
+        limit < 2 ||
+        limit > 1_000_000
+      ) {
+        showError(
+          "Hãy nhập số nguyên từ 2 đến 1.000.000.",
+        );
+
+        return;
+      }
+
+      if (FUNCTION_URL.includes("PROJECT_ID")) {
+        showError(
+          "Bạn chưa thay PROJECT_ID bằng URL Supabase thật.",
+        );
+
+        return;
+      }
+
+      button.disabled = true;
+      statusBox.textContent = "Đang tính toán…";
+
+      const requestStartedAt = performance.now();
+
+      try {
+        const response = await fetch(FUNCTION_URL, {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            limit: limit,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error || `HTTP ${response.status}`,
+          );
+        }
+
+        const totalMs =
+          performance.now() - requestStartedAt;
+
+        statusBox.textContent = "Hoàn thành.";
+
+        summary.textContent =
+          `Tìm thấy ${data.count.toLocaleString("vi-VN")} ` +
+          `số nguyên tố. ` +
+          `Thời gian tính trên Supabase: ` +
+          `${data.calculationMs.toLocaleString("vi-VN")} ms. ` +
+          `Tổng thời gian yêu cầu: ` +
+          `${totalMs.toFixed(1)} ms.`;
+
+        output.textContent = data.primes.join(", ");
+        output.hidden = false;
+      } catch (error) {
+        showError(`Lỗi: ${error.message}`);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    function showError(message) {
+      statusBox.className = "error";
+      statusBox.textContent = message;
+    }
+  </script>
+</body>
+</html>
