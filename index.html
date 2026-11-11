@@ -8,7 +8,7 @@
     content="width=device-width, initial-scale=1"
   >
 
-  <title>Tìm số nguyên tố</title>
+  <title>Kiểm thử số nguyên tố</title>
 
   <style>
     * {
@@ -27,7 +27,7 @@
     }
 
     main {
-      width: min(800px, 100%);
+      width: min(820px, 100%);
       padding: 32px;
       background: white;
       border-radius: 18px;
@@ -51,7 +51,7 @@
 
     input {
       flex: 1;
-      min-width: 200px;
+      min-width: 220px;
       padding: 12px;
       border: 1px solid #a7b3ad;
       border-radius: 10px;
@@ -82,16 +82,26 @@
     #summary {
       margin: 8px 0 12px;
       font-weight: bold;
+      white-space: pre-line;
     }
 
     #output {
-      max-height: 400px;
+      max-height: 420px;
       padding: 16px;
       overflow: auto;
       line-height: 1.7;
+      white-space: pre-wrap;
       overflow-wrap: anywhere;
       background: #edf3f0;
       border-radius: 12px;
+    }
+
+    .warning {
+      padding: 12px;
+      margin: 16px 0;
+      background: #fff4ce;
+      color: #594400;
+      border-radius: 10px;
     }
 
     .error {
@@ -115,6 +125,11 @@
         border-color: #55625c;
       }
 
+      .warning {
+        background: #493e13;
+        color: #ffe990;
+      }
+
       .error {
         color: #ff8a80;
       }
@@ -124,30 +139,35 @@
 
 <body>
   <main>
-    <h1>Tìm các số nguyên tố</h1>
+    <h1>Kiểm thử số nguyên tố</h1>
 
     <p>
-      Nhập một số nguyên. Chương trình sẽ liệt kê tất cả
-      số nguyên tố nhỏ hơn số đó.
+      Supabase sẽ đếm tất cả số nguyên tố nhỏ hơn
+      số bạn nhập.
     </p>
+
+    <div class="warning">
+      Chương trình không có giới hạn trần do ứng dụng
+      đặt ra. Giá trị quá lớn có thể khiến Edge Function
+      bị ngắt do giới hạn CPU, RAM hoặc thời gian.
+    </div>
 
     <form id="prime-form">
       <label for="limit">
-        Nhập số từ 2 đến 1.000.000.000
+        Nhập một số nguyên lớn hơn hoặc bằng 2
       </label>
 
       <input
         id="limit"
         type="number"
         min="2"
-        max="1000000000"
         step="1"
-        value="100"
+        value="100000000"
         required
       >
 
       <button id="submit" type="submit">
-        Tính toán
+        Bắt đầu kiểm thử
       </button>
     </form>
 
@@ -158,99 +178,166 @@
     ></div>
 
     <div id="summary"></div>
-
     <div id="output" hidden></div>
   </main>
 
   <script>
-    // Thay URL này bằng URL Edge Function của bạn.
     const FUNCTION_URL =
       "https://uqkjcvmqysetlljxzmen.supabase.co/functions/v1/automation-test";
 
-    const form = document.querySelector("#prime-form");
-    const input = document.querySelector("#limit");
-    const button = document.querySelector("#submit");
-    const statusBox = document.querySelector("#status");
-    const summary = document.querySelector("#summary");
-    const output = document.querySelector("#output");
+    const form =
+      document.querySelector("#prime-form");
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    const input =
+      document.querySelector("#limit");
 
-      statusBox.className = "";
-      summary.textContent = "";
-      output.textContent = "";
-      output.hidden = true;
+    const button =
+      document.querySelector("#submit");
 
-      const limit = Number(input.value);
+    const statusBox =
+      document.querySelector("#status");
 
-      if (
-        !Number.isSafeInteger(limit) ||
-        limit < 2 ||
-        limit > 1_000_000_000
-      ) {
-        showError(
-          "Hãy nhập số nguyên từ 2 đến 1.000.000.000",
-        );
+    const summary =
+      document.querySelector("#summary");
 
-        return;
-      }
+    const output =
+      document.querySelector("#output");
 
-      if (FUNCTION_URL.includes("PROJECT_ID")) {
-        showError(
-          "Bạn chưa thay PROJECT_ID bằng URL Supabase thật.",
-        );
+    form.addEventListener(
+      "submit",
+      async (event) => {
+        event.preventDefault();
 
-        return;
-      }
+        statusBox.className = "";
+        summary.textContent = "";
+        output.textContent = "";
+        output.hidden = true;
 
-      button.disabled = true;
-      statusBox.textContent = "Đang tính toán…";
+        const limit = Number(input.value);
 
-      const requestStartedAt = performance.now();
-
-      try {
-        const response = await fetch(FUNCTION_URL, {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            limit: limit,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(
-            data.error || `HTTP ${response.status}`,
+        if (
+          !Number.isSafeInteger(limit) ||
+          limit < 2
+        ) {
+          showError(
+            "Hãy nhập một số nguyên an toàn lớn hơn hoặc bằng 2.",
           );
+
+          return;
         }
 
-        const totalMs =
-          performance.now() - requestStartedAt;
+        if (FUNCTION_URL.includes("PROJECT_ID")) {
+          showError(
+            "Bạn chưa thay PROJECT_ID bằng URL Supabase thật.",
+          );
 
-        statusBox.textContent = "Hoàn thành.";
+          return;
+        }
 
-        summary.textContent =
-          `Tìm thấy ${data.count.toLocaleString("vi-VN")} ` +
-          `số nguyên tố. ` +
-          `Thời gian tính trên Supabase: ` +
-          `${data.calculationMs.toLocaleString("vi-VN")} ms. ` +
-          `Tổng thời gian yêu cầu: ` +
-          `${totalMs.toFixed(1)} ms.`;
+        button.disabled = true;
+        input.disabled = true;
 
-        output.textContent = data.primes.join(", ");
-        output.hidden = false;
-      } catch (error) {
-        showError(`Lỗi: ${error.message}`);
-      } finally {
-        button.disabled = false;
-      }
-    });
+        statusBox.textContent =
+          "Đang tính toán. Không đóng trang này…";
+
+        const requestStartedAt =
+          performance.now();
+
+        try {
+          const response = await fetch(
+            FUNCTION_URL,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                limit: limit,
+              }),
+            },
+          );
+
+          const responseText =
+            await response.text();
+
+          let data;
+
+          try {
+            data = JSON.parse(responseText);
+          } catch {
+            throw new Error(
+              "Supabase không trả JSON. " +
+              "Function có thể đã bị ngắt hoặc timeout.",
+            );
+          }
+
+          if (!response.ok || !data.success) {
+            throw new Error(
+              data.error ||
+              `HTTP ${response.status}`,
+            );
+          }
+
+          const totalMs =
+            performance.now() -
+            requestStartedAt;
+
+          statusBox.textContent =
+            "Hoàn thành.";
+
+          summary.textContent =
+            `Giới hạn: ${
+              data.limit.toLocaleString("vi-VN")
+            }\n` +
+            `Số lượng số nguyên tố: ${
+              data.primeCount.toLocaleString("vi-VN")
+            }\n` +
+            `Thời gian tính trên Supabase: ${
+              data.calculationSeconds
+                .toLocaleString("vi-VN")
+            } giây\n` +
+            `Tổng thời gian yêu cầu: ${
+              (totalMs / 1000).toFixed(3)
+            } giây\n` +
+            `Số đoạn đã xử lý: ${
+              data.segmentsProcessed
+                .toLocaleString("vi-VN")
+            }`;
+
+          output.textContent =
+            "100 số nguyên tố đầu tiên:\n" +
+            data.firstPrimes.join(", ") +
+            "\n\n100 số nguyên tố cuối cùng:\n" +
+            data.lastPrimes.join(", ");
+
+          output.hidden = false;
+        } catch (error) {
+          const totalSeconds =
+            (
+              (
+                performance.now() -
+                requestStartedAt
+              ) / 1000
+            ).toFixed(3);
+
+          showError(
+            `Phép thử thất bại sau ` +
+            `${totalSeconds} giây.\n` +
+            `${
+              error instanceof Error
+                ? error.message
+                : String(error)
+            }`,
+          );
+        } finally {
+          button.disabled = false;
+          input.disabled = false;
+        }
+      },
+    );
 
     function showError(message) {
       statusBox.className = "error";
