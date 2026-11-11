@@ -53,7 +53,7 @@ jobs:
           cargo --version
 
       - name: Biên dịch bản tối ưu
-        run: cargo build --release --locked
+        run: cargo build --release
 
       - name: Hiển thị kích thước chương trình
         run: |
