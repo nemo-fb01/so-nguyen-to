@@ -13,19 +13,25 @@ fn integer_sqrt(number: u64) -> u64 {
 
     let mut result = (number as f64).sqrt() as u64;
 
-    while result
-        .checked_add(1)
-        .and_then(|value| value.checked_mul(value))
-        .is_some_and(|square| square <= number)
-    {
-        result += 1;
+    loop {
+        let next = match result.checked_add(1) {
+            Some(value) => value,
+            None => break,
+        };
+
+        match next.checked_mul(next) {
+            Some(square) if square <= number => {
+                result = next;
+            }
+            _ => break,
+        }
     }
 
-    while result
-        .checked_mul(result)
-        .is_none_or(|square| square > number)
-    {
-        result -= 1;
+    loop {
+        match result.checked_mul(result) {
+            Some(square) if square <= number => break,
+            _ => result -= 1,
+        }
     }
 
     result
@@ -37,53 +43,52 @@ fn create_base_primes(limit: u64) -> Vec<u64> {
     }
 
     /*
-     * Mỗi phần tử đại diện cho một số lẻ:
+     * Chỉ lưu các số lẻ:
      *
-     * index 0 -> 3
-     * index 1 -> 5
-     * index 2 -> 7
+     * index 0 tương ứng với 3
+     * index 1 tương ứng với 5
+     * index 2 tương ứng với 7
      */
-    let odd_count = ((limit - 3)*/ 2 + 1) as usize;
-    let mut com*osite = vec![0_u8; odd_count];
+    let odd_count = ((limit - 3) / 2 + 1) as usize;
+    let mut composite = vec![0_u8; odd_count];
 
-  * let sieve_limit = integer_sqrt(li*it);
+    let sieve_limit = integer_sqrt(limit);
+    let mut index = 0_usize;
 
-    let mut index = 0_usize;*
     while index < odd_count {
-   *    let prime = 2_u64 * index as u*4 + 3;
+        let prime = 2_u64 * index as u64 + 3;
 
-        if prime > sieve_l*mit {
+        if prime > sieve_limit {
             break;
-        }*
-        if composite[index] == 0 *
-            let start = ((prime **prime - 3) / 2) as usize;
-        *   let step = prime as usize;
-
-   *        let mut multiple_index = s*art;
-
-            while multiple_i*dex < odd_count {
-                *omposite[multiple_index] = 1;
-    *           multiple_index += step;*            }
         }
 
-        i*dex += 1;
+        if composite[index] == 0 {
+            let start = ((prime * prime - 3) / 2) as usize;
+            let step = prime as usize;
+            let mut multiple_index = start;
+
+            while multiple_index < odd_count {
+                composite[multiple_index] = 1;
+                multiple_index += step;
+            }
+        }
+
+        index += 1;
     }
 
-    composite
-   *    .iter()
-        .enumerate()
- *      .filter_map(|(index, &is_com*osite)| {
-            if is_compos*te == 0 {
-                Some(2_u*4 * index as u64 + 3)
-            * else {
-                None
-     *      }
-        })
-        .collec*()
+    let mut primes = Vec::new();
+
+    for (index, &is_composite) in composite.iter().enumerate() {
+        if is_composite == 0 {
+            primes.push(2_u64 * index as u64 + 3);
+        }
+    }
+
+    primes
 }
 
 struct BenchmarkResult {
-   *limit: u64,
+    limit: u64,
     prime_count: u64,
     elapsed_seconds: f64,
     segments_processed: u64,
@@ -109,174 +114,215 @@ fn count_primes(limit: u64) -> BenchmarkResult {
      * Số 2 là số nguyên tố chẵn duy nhất.
      */
     let mut prime_count = 1_u64;
-    let mut first_primes = Vec::with_capacity(PREVIEW_COUNT);
-    let mut last_primes = VecDeque::with_capacity(PREVIEW_COUNT);
+
+    let mut first_primes =
+        Vec::with_capacity(PREVIEW_COUNT);
+
+    let mut last_primes =
+        VecDeque::with_capacity(PREVIEW_COUNT);
 
     first_primes.push(2);
     last_primes.push_back(2);
 
     let maximum_value = limit - 1;
     let square_root = integer_sqrt(maximum_value);
-    let base_primes = create_base_primes(square_root);
 
     /*
-     * Mỗi đoạn chỉ chứa các số lẻ.
-     *
-     * SEGMENT_ODD_COUNT = 8.388.608 byte,
-     * tương đương khoảng 8 MiB bộ nhớ làm việc.
+     * Đây là những số nguyên tố dùng để đánh dấu
+     * các hợp số trong từng đoạn.
      */
-    let segment_span =
-        (SEGMENT_ODD_COUNT as u64)
-            .checked_mul(2)
-            .expect("Segment size overflow");
+    let base_primes =
+        create_base_primes(square_root);
+
+    /*
+     * Mỗi phần tử trong segment đại diện cho một số lẻ.
+     * Vì vậy một segment 8 MiB bao phủ khoảng 16 triệu số.
+     */
+    let segment_span = (
+        SEGMENT_ODD_COUNT as u64
+    )
+        .checked_mul(2)
+        .expect("Kich thuoc segment bi tran so.");
 
     let mut segment_low = 3_u64;
     let mut segments_processed = 0_u64;
 
     while segment_low < limit {
         /*
-         * Bảo đảm đầu đoạn luôn là số lẻ.
+         * segment_low luôn phải là số lẻ.
          */
-        if segment_low % 2 == 0 *
+        if segment_low % 2 == 0 {
             segment_low += 1;
-   *    }
+        }
 
-        let segment_high = *egment_low
-            .saturating*add(segment_span)
-            .min*limit);
+        let segment_high = segment_low
+            .saturating_add(segment_span)
+            .min(limit);
 
+        /*
+         * Số lượng số lẻ trong khoảng:
+         *
+         * [segment_low, segment_high)
+         */
         let odd_count =
- *          ((segment_high - segment*low) + 1) / 2;
+            ((segment_high - segment_low) + 1) / 2;
 
-        let mut co*posite =
+        let mut composite =
             vec![0_u8; odd_count as usize];
 
-        for &pr*me in &base_primes {
-            l*t prime_square = match prime.check*d_mul(prime) {
-                Som*(value) => value,
-                None => break,
-            };
+        for &prime in &base_primes {
+            let prime_square =
+                match prime.checked_mul(prime) {
+                    Some(value) => value,
+                    None => break,
+                };
 
+            /*
+             * Nếu bình phương của prime đã nằm ngoài
+             * segment thì các prime tiếp theo cũng vậy.
+             */
             if prime_square >= segment_high {
                 break;
             }
 
+            /*
+             * Tìm bội đầu tiên của prime không nhỏ hơn
+             * segment_low.
+             */
             let quotient =
-                segment_low.saturating_add(prime - 1) / prime;
+                segment_low.saturating_add(prime - 1)
+                    / prime;
 
-            let first_divisible = match quotient.checked_mul(prime) {
-                Some(value) => value,
-                None => continue,
-            };
+            let first_divisible =
+                match quotient.checked_mul(prime) {
+                    Some(value) => value,
+                    None => continue,
+                };
 
             let mut first_multiple =
                 prime_square.max(first_divisible);
 
             /*
-             * Đoạn chỉ lưu số lẻ. Nếu bội đầu tiên là số chẵn,
-             * chuyển sang bội lẻ tiếp theo.
+             * Segment chỉ lưu số lẻ.
+             * Nếu bội đầu tiên là chẵn, chuyển sang
+             * bội lẻ kế tiếp.
              */
-            if first_multiple % * == 0 {
-                first_mult*ple =
-                    first_mu*tiple.saturating_add(prime);
-     *      }
-
-            if first_mult*ple >= segment_high {
-            *   continue;
+            if first_multiple % 2 == 0 {
+                first_multiple =
+                    first_multiple.saturating_add(prime);
             }
 
-      *     let mut index =
-             *  ((first_multiple - segment_low) * 2) as usize;
+            if first_multiple >= segment_high {
+                continue;
+            }
 
-            let ste* = prime as usize;
+            let mut mark_index = (
+                (first_multiple - segment_low) / 2
+            ) as usize;
 
-            wh*le index < composite.len() {
-     *          composite[index] = 1;
-  *             index += step;
-      *     }
+            /*
+             * Vì index chỉ đại diện cho số lẻ, bước nhảy
+             * trong mảng bằng chính prime.
+             */
+            let step = prime as usize;
+
+            while mark_index < composite.len() {
+                composite[mark_index] = 1;
+                mark_index += step;
+            }
         }
 
-        for (ind*x, &is_composite) in composite.ite*().enumerate() {
-            if is*composite != 0 {
-                c*ntinue;
+        for (
+            index,
+            &is_composite,
+        ) in composite.iter().enumerate() {
+            if is_composite != 0 {
+                continue;
             }
 
-           *let prime = segment_low + 2 * inde* as u64;
+            let prime =
+                segment_low + 2 * index as u64;
 
-            if prime >= *imit {
+            if prime >= limit {
                 break;
-    *       }
+            }
 
-            prime_count *= 1;
+            prime_count += 1;
 
-            if first_primes.*en() < PREVIEW_COUNT {
-           *    first_primes.push(prime);
-    *       }
+            if first_primes.len() < PREVIEW_COUNT {
+                first_primes.push(prime);
+            }
 
-            if last_prim*s.len() == PREVIEW_COUNT {
-       *        last_primes.pop_front();
- *          }
+            if last_primes.len() == PREVIEW_COUNT {
+                last_primes.pop_front();
+            }
 
-            last_prim*s.push_back(prime);
+            last_primes.push_back(prime);
         }
 
-   *    segments_processed += 1;
+        segments_processed += 1;
 
-    *   let processed_to = segment_high*min(limit);
-        let progress =*            processed_to as f64 / *imit as f64 * 100.0;
+        let processed_to =
+            segment_high.min(limit);
 
-        prin*ln!(
-            "Đã xử lý {:>15} * {:>15} | \
-             {:>7.3}% * {:>15} số nguyên tố | \
-         *   {:>10.3} giây",
-            pro*essed_to,
+        let progress =
+            processed_to as f64
+                / limit as f64
+                * 100.0;
+
+        println!(
+            concat!(
+                "Da xu ly {:>15} / {:>15}",
+                " | {:>7.3}%",
+                " | {:>15} so nguyen to",
+                " | {:>10.3} giay"
+            ),
+            processed_to,
             limit,
-     *      progress,
-            prime_*ount,
-            started_at.elaps*d().as_secs_f64(),
+            progress,
+            prime_count,
+            started_at.elapsed().as_secs_f64(),
         );
 
-   *    segment_low = segment_high;
-
- *      if segment_low % 2 == 0 {
-  *         segment_low += 1;
-       *}
+        segment_low = segment_high;
     }
 
     BenchmarkResult {
-   *    limit,
+        limit,
         prime_count,
-  *     elapsed_seconds: started_at.e*apsed().as_secs_f64(),
-        seg*ents_processed,
-        first_prim*s,
-        last_primes: last_prime*.into_iter().collect(),
+        elapsed_seconds:
+            started_at.elapsed().as_secs_f64(),
+        segments_processed,
+        first_primes,
+        last_primes:
+            last_primes.into_iter().collect(),
     }
 }
 
-f* format_numbers(numbers: &[u64]) -* String {
+fn format_numbers(
+    numbers: &[u64],
+) -> String {
     numbers
-        .ite*()
-        .map(u64::to_string)
-  *     .collect::<Vec<_>>()
-        *join(", ")
+        .iter()
+        .map(|number| number.to_string())
+        .collect::<Vec<String>>()
+        .join(", ")
 }
 
 fn main() {
-    let *imit_text = env::args()
-        .n*h(1)
-        .unwrap_or_else(|| {
-*           eprintln!(
-            *   "Cách dùng: prime-benchmark <li*it>"
+    let limit_text =
+        env::args().nth(1).unwrap_or_else(|| {
+            eprintln!(
+                "Cach dung: prime-benchmark <limit>"
             );
 
-            s*d::process::exit(2);
+            std::process::exit(2);
         });
 
-*   let limit: u64 = limit_text
-   *    .parse()
-        .unwrap_or_el*e(|_| {
+    let limit: u64 =
+        limit_text.parse().unwrap_or_else(|_| {
             eprintln!(
-   *            "Giới hạn phải là một *ố nguyên dương."
+                "Gioi han phai la so nguyen duong."
             );
 
             std::process::exit(2);
@@ -284,55 +330,70 @@ fn main() {
 
     if limit < 2 {
         eprintln!(
-            "Giới hạn phải lớn hơn hoặc bằng 2."
+            "Gioi han phai lon hon hoac bang 2."
         );
 
         std::process::exit(2);
     }
 
     println!(
-        "Bắt đầu tìm số nguyên tố nhỏ hơn {}...",
+        "Bat dau tim so nguyen to nho hon {}...",
         limit
     );
 
     println!(
-        "Kích thước mỗi đoạn: {} số lẻ, khoảng {:.1} MiB",
+        concat!(
+            "Kich thuoc moi segment: ",
+            "{} so le, khoang {:.1} MiB"
+        ),
         SEGMENT_ODD_COUNT,
-        SEGMENT_ODD_COUNT as f64 / 1_048_576.0,
+        SEGMENT_ODD_COUNT as f64
+            / 1_048_576.0,
     );
 
     let result = count_primes(limit);
 
+    let throughput =
+        if result.elapsed_seconds > 0.0 {
+            result.limit as f64
+                / result.elapsed_seconds
+                / 1_000_000.0
+        } else {
+            0.0
+        };
+
     let report = format!(
         concat!(
-            "Giới hạn: {}\n",
-            "Số lượng số nguyên tố: {}\n",
-            "Thời gian tính: {:.6} giây\n",
-            "Số đoạn đã xử lý: {}\n",
-            "Tốc độ trung bình: {:.3} triệu số/giây\n",
+            "Gioi han: {}\n",
+            "So luong so nguyen to: {}\n",
+            "Thoi gian tinh: {:.6} giay\n",
+            "So segment da xu ly: {}\n",
+            "Toc do trung binh: ",
+            "{:.3} trieu so/giay\n",
             "\n",
-            "100 số nguyên tố đầu tiên:\n",
+            "100 so nguyen to dau tien:\n",
             "{}\n",
             "\n",
-            "100 số nguyên tố cuối cùng:\n",
+            "100 so nguyen to cuoi cung:\n",
             "{}\n"
         ),
         result.limit,
         result.prime_count,
         result.elapsed_seconds,
         result.segments_processed,
-        result.limit as f64
-            / result.elapsed_seconds
-            / 1_000_000.0,
+        throughput,
         format_numbers(&result.first_primes),
         format_numbers(&result.last_primes),
     );
 
-    println!("\n{report}");
+    println!();
+    println!("{report}");
 
     fs::write(
         "prime-result.txt",
         &report,
     )
-    .expect("Không thể ghi prime-result.txt");
+    .expect(
+        "Khong the ghi file prime-result.txt.",
+    );
 }
