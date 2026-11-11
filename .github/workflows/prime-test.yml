@@ -1,0 +1,114 @@
+name: Rust prime benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Tìm số nguyên tố nhỏ hơn số này"
+        required: true
+        default: "100000000"
+        type: string
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 360
+
+    concurrency:
+      group: rust-prime-benchmark
+      cancel-in-progress: false
+
+    env:
+      CARGO_TERM_COLOR: always
+      RUSTFLAGS: >-
+        -C opt-level=3
+        -C target-cpu=native
+        -C codegen-units=1
+
+    steps:
+      - name: Lấy source code
+        uses: actions/checkout@v4
+
+      - name: Kiểm tra dữ liệu nhập
+        shell: bash
+        env:
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          if [[ ! "$LIMIT" =~ ^[0-9]+$ ]]; then
+            echo "Giới hạn phải là số nguyên dương."
+            exit 1
+          fi
+
+          if [ "$LIMIT" -lt 2 ]; then
+            echo "Giới hạn phải lớn hơn hoặc bằng 2."
+            exit 1
+          fi
+
+          echo "Giới hạn: $LIMIT"
+
+      - name: Hiển thị phiên bản Rust
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Biên dịch bản tối ưu
+        run: cargo build --release --locked
+
+      - name: Hiển thị kích thước chương trình
+        run: |
+          ls -lh target/release/prime-benchmark
+
+      - name: Chạy benchmark
+        env:
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          /usr/bin/time \
+            --verbose \
+            target/release/prime-benchmark \
+            "$LIMIT" \
+            2> resource-usage.txt
+
+      - name: Hiển thị mức sử dụng tài nguyên
+        if: always()
+        run: |
+          if [ -f resource-usage.txt ]; then
+            cat resource-usage.txt
+          fi
+
+      - name: Tạo Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Kết quả benchmark Rust"
+            echo
+
+            if [ -f prime-result.txt ]; then
+              echo '```text'
+              cat prime-result.txt
+              echo '```'
+            else
+              echo "Phép thử không tạo được file kết quả."
+            fi
+
+            if [ -f resource-usage.txt ]; then
+              echo
+              echo "## Tài nguyên runner"
+              echo
+              echo '```text'
+              cat resource-usage.txt
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Lưu kết quả
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-prime-benchmark-result
+          path: |
+            prime-result.txt
+            resource-usage.txt
+          if-no-files-found: ignore
+          retention-days: 7
